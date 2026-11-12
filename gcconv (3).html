@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversor de región GCI</title>
+
+<!-- =====================================================================
+     ESTILOS  (solo apariencia; no hay lógica aquí)
+     ===================================================================== -->
+<style>
+/* 1. Tokens: índigo del menú de GameCube con naranja como acento ------- */
+:root{
+  color-scheme:dark;
+  --fondo:#1a1260;        /* página */
+  --panel-a:#262c78;      /* parte alta de las tarjetas */
+  --panel-b:#1a1658;      /* parte baja de las tarjetas */
+  --hondo:rgba(8,6,52,.5);/* superficies hundidas (celdas, código) */
+  --lila:#8c82ff;         /* bordes y brillos */
+  --titulo:#a9b8ff;       /* títulos de tarjeta */
+  --texto:#eceeff;
+  --texto-mut:#b3b6dc;
+  --violeta-a:#5a4cd0;    /* degradado de botones en reposo */
+  --violeta-b:#3a2fa4;
+  --violeta-c:#2c2382;
+  --aviso-a:#15125c;      /* franja de mensaje: azul noche -> violeta */
+  --aviso-b:#3b21a8;
+  --naranja-a:rgba(255,196,130,.9);  /* degradado naranja translúcido: luz -> sombra */
+  --naranja-b:rgba(255,140,50,.78);
+  --naranja-c:rgba(235,105,20,.7);
+  --naranja-solido:#ff8a2a;          /* solo para acentos pequeños (borde, aviso) */
+  --naranja-borde:rgba(255,214,160,.85);
+  --naranja-halo:0 0 0 2px rgba(20,17,90,.8),0 0 14px rgba(255,150,60,.35),inset 0 1px 0 rgba(255,255,255,.45);
+  --naranja-texto:#2b1300;
+  /* relieve: borde luminoso + resplandor exterior + brillo interior */
+  --brillo:0 0 0 1px rgba(140,130,255,.55),0 0 16px rgba(110,90,255,.35),inset 0 0 18px rgba(130,120,255,.16);
+  --fuente:"Futura","Avenir Next","Century Gothic","Trebuchet MS",system-ui,sans-serif;
+}
+
+/* 2. Base --------------------------------------------------------------- */
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--fuente);letter-spacing:.015em;color:var(--texto);line-height:1.55;min-height:100vh;padding:22px 20px 56px;
+  background-color:var(--fondo);
+  background-image:linear-gradient(rgba(150,140,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(150,140,255,.06) 1px,transparent 1px);
+  background-size:6px 6px}
+[hidden]{display:none!important}
+h1{font-size:clamp(26px,4vw,36px);margin:0;letter-spacing:0;line-height:1.12}
+h2{position:relative;font-size:17px;font-weight:600;color:var(--titulo);margin:0 0 14px;padding-bottom:8px}
+h2::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,var(--lila),transparent)}
+.sub{color:var(--texto-mut);margin:10px 0 0;max-width:58ch}
+code{background:var(--hondo);padding:1px 7px;border-radius:6px;font-size:.9em;color:var(--texto)}
+
+/* 3. Estructura: barra superior + panel principal + lateral -------------- */
+.contenedor{max-width:1080px;margin:0 auto;display:grid;gap:22px}
+.barra{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;border-radius:14px;background:linear-gradient(180deg,var(--panel-a),var(--panel-b));box-shadow:var(--brillo)}
+.marca-nombre{display:flex;align-items:center;gap:10px;font-weight:700}
+.marca{position:relative;width:26px;height:26px;border-radius:7px;border:1px solid var(--naranja-borde);
+  background:linear-gradient(180deg,var(--naranja-a),var(--naranja-b) 45%,var(--naranja-c))}
+.marca::after{content:"";position:absolute;inset:6px;border:2px solid var(--naranja-texto);border-radius:3px}
+.estado{font-size:13px;padding:5px 14px;border-radius:8px;background:var(--hondo);color:var(--texto-mut);box-shadow:inset 0 0 0 1px rgba(140,130,255,.3)}
+
+.cuadricula{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:20px;align-items:start}
+.principal{display:grid;gap:18px}
+.lateral{display:grid;gap:18px}
+.intro{padding:8px 4px 4px}
+
+/* 4. Componentes -------------------------------------------------------- */
+.tarjeta{border-radius:14px;padding:20px 22px 22px;background:linear-gradient(180deg,var(--panel-a),var(--panel-b));box-shadow:var(--brillo)}
+
+.zona{display:grid;gap:6px;min-height:150px;align-content:center;padding:22px 26px;cursor:pointer;
+  background:var(--hondo);border:2px dashed var(--lila);border-radius:14px;transition:border-color .2s,background .2s}
+.zona:hover,.zona.sobre,.zona:focus-visible{border-color:var(--naranja-solido);background:rgba(8,6,52,.7);outline:none}
+.zona b{font-size:18px;word-break:break-all}
+.zona span{color:var(--texto-mut);font-size:14px}
+
+.datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.celda{background:var(--hondo);border-radius:10px;padding:12px 14px;box-shadow:inset 0 2px 6px rgba(0,0,0,.35),inset 0 0 0 1px rgba(140,130,255,.22)}
+.celda small{display:block;color:var(--texto-mut);font-size:12px}
+.celda strong{font-size:17px;word-break:break-all}
+
+.aviso{display:inline-block;margin-top:12px;padding:4px 12px;border-radius:8px;font-size:13px;background:var(--hondo);color:var(--texto);box-shadow:inset 0 0 0 1px rgba(140,130,255,.3)}
+.aviso.alerta{background:var(--naranja-solido);color:var(--naranja-texto);box-shadow:none}
+
+/* Mosaicos de región: violeta en reposo, naranja al elegir, inverso al pulsar */
+.regiones{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.region{font:inherit;letter-spacing:inherit;color:var(--texto);text-align:center;padding:18px 8px;cursor:pointer;
+  background:linear-gradient(180deg,var(--violeta-a),var(--violeta-b) 50%,var(--violeta-c));
+  border:1px solid rgba(160,150,255,.6);border-radius:10px;
+  box-shadow:0 0 0 2px rgba(20,17,90,.8),inset 0 1px 0 rgba(255,255,255,.3);
+  transition:transform .18s,box-shadow .18s}
+.region i{display:block;font-style:normal;font-size:38px;font-weight:800;line-height:1.1}
+.region b{display:block;margin-top:4px}
+.region span{display:block;font-size:13px;color:var(--texto-mut)}
+.region:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 0 0 2px rgba(20,17,90,.8),0 0 14px rgba(140,130,255,.55),inset 0 1px 0 rgba(255,255,255,.3)}
+.region:focus-visible{outline:2px solid var(--texto);outline-offset:3px}
+.region.elegida{color:var(--naranja-texto);border-color:var(--naranja-borde);
+  background:linear-gradient(180deg,var(--naranja-a),var(--naranja-b) 45%,var(--naranja-c));
+  box-shadow:var(--naranja-halo)}
+.region.elegida span{color:rgba(43,19,0,.75)}
+.region:active:not(:disabled){transform:none;background:linear-gradient(180deg,var(--violeta-c),var(--violeta-b) 50%,var(--violeta-a))}
+.region.elegida:active:not(:disabled){background:linear-gradient(180deg,var(--naranja-c),var(--naranja-b) 55%,var(--naranja-a))}
+.region:disabled{opacity:.45;cursor:not-allowed}
+
+/* Franja de mensaje (como la barra de ayuda del menú) + botón */
+.pie{display:flex;align-items:stretch;justify-content:space-between;gap:14px 18px;flex-wrap:wrap;margin-top:18px}
+.destino{flex:1 1 220px;margin:0;padding:11px 16px;font-size:13px;word-break:break-all;display:flex;align-items:center;
+  border-radius:10px;background:linear-gradient(180deg,var(--aviso-a),var(--aviso-b));box-shadow:var(--brillo)}
+
+.boton{flex:none;font:inherit;letter-spacing:inherit;font-weight:700;font-size:16px;padding:13px 28px;cursor:pointer;
+  color:var(--naranja-texto);border:1px solid var(--naranja-borde);border-radius:10px;
+  background:linear-gradient(180deg,var(--naranja-a),var(--naranja-b) 45%,var(--naranja-c));
+  box-shadow:var(--naranja-halo)}
+.boton:hover:not(:disabled){filter:brightness(1.08)}
+.boton:active:not(:disabled){transform:translateY(1px);filter:none;
+  background:linear-gradient(180deg,var(--naranja-c),var(--naranja-b) 55%,var(--naranja-a));
+  box-shadow:0 0 0 2px rgba(20,17,90,.8),inset 0 2px 6px rgba(0,0,0,.3)}
+.boton:disabled{opacity:.4;cursor:not-allowed}
+.boton:focus-visible{outline:2px solid var(--texto);outline-offset:3px}
+
+.barra-derecha{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.idioma{font:inherit;font-size:13px;letter-spacing:inherit;color:var(--texto);cursor:pointer;padding:5px 10px;border:0;border-radius:8px;
+  background:var(--hondo);box-shadow:inset 0 0 0 1px rgba(140,130,255,.45)}
+.idioma:hover{box-shadow:inset 0 0 0 1px var(--lila)}
+.idioma:focus-visible{outline:2px solid var(--texto);outline-offset:2px}
+.idioma option{background:var(--panel-b);color:var(--texto)}
+
+ol,ul{margin:0;padding-left:22px;color:var(--texto-mut)}
+li{margin:6px 0}
+li b{color:var(--texto)}
+
+/* 5. Responsive y accesibilidad ---------------------------------------- */
+@media(max-width:860px){.cuadricula{grid-template-columns:1fr}}
+@media(max-width:480px){.region i{font-size:30px}.boton{width:100%}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+
+<!-- =====================================================================
+     MARCADO  (estructura; sin estilos ni lógica en línea)
+     ===================================================================== -->
+<body>
+<div class="contenedor">
+
+  <header class="barra">
+    <div class="marca-nombre"><span class="marca" aria-hidden="true"></span><span data-i18n="marca"></span></div>
+    <div class="barra-derecha">
+      <span class="estado" data-i18n="estado"></span>
+      <select class="idioma" id="idioma">
+        <option value="es">Español</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="cuadricula">
+
+    <main class="principal">
+      <div class="intro">
+        <h1 data-i18n="titulo"></h1>
+        <p class="sub" data-i18n="subtitulo"></p>
+      </div>
+
+      <label class="zona" id="zona" tabindex="0">
+        <b id="zonaTitulo"></b>
+        <span id="zonaSub"></span>
+        <input type="file" id="archivo" accept=".gci" hidden>
+      </label>
+
+      <section class="tarjeta" id="tarjetaDatos" hidden>
+        <h2 data-i18n="datosTitulo"></h2>
+        <div class="datos" id="datos"></div>
+        <span class="aviso" id="aviso"></span>
+      </section>
+
+      <section class="tarjeta" id="tarjetaConvertir" hidden>
+        <h2 data-i18n="convertirTitulo"></h2>
+        <div class="regiones" id="regiones"></div>
+        <div class="pie">
+          <p class="destino" id="destino"></p>
+          <button class="boton" id="descargar" disabled></button>
+        </div>
+      </section>
+    </main>
+
+    <aside class="lateral">
+      <section class="tarjeta">
+        <h2 data-i18n="usoTitulo"></h2>
+        <ol>
+          <li data-i18n-html="uso1"></li>
+          <li data-i18n-html="uso2"></li>
+          <li data-i18n-html="uso3"></li>
+        </ol>
+      </section>
+
+      <section class="tarjeta">
+        <h2 data-i18n="antesTitulo"></h2>
+        <ul>
+          <li data-i18n-html="antes1"></li>
+          <li data-i18n-html="antes2"></li>
+          <li data-i18n-html="antes3"></li>
+          <li data-i18n-html="antes4"></li>
+        </ul>
+      </section>
+    </aside>
+
+  </div>
+</div>
+
+<script type="module">
+/* =====================================================================
+   MÓDULO GCI  (lógica pura sobre bytes; no toca el DOM)
+   Formato de la entrada de directorio de un .gci:
+     0x00-0x03  código del juego (el 4.º byte es la región)
+     0x04-0x05  maker (publisher)
+     0x06       sin uso (normalmente 0xFF)
+     tamaño     0x40 + n * 0x2000
+   ===================================================================== */
+const GCI = (() => {
+  const OFFSET_REGION = 0x03;
+  const OFFSET_SIN_USO = 0x06;
+  const TAM_CABECERA = 0x40;
+  const TAM_BLOQUE = 0x2000;
+
+  const REGIONES = {
+    0x50: { nombre: "PAL",    letra: "P" },
+    0x45: { nombre: "NTSC-U", letra: "E" },
+    0x4A: { nombre: "NTSC-J", letra: "J" },
+  };
+
+  const ascii = (bytes) =>
+    Array.from(bytes, (b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : "?")).join("");
+
+  // Devuelve los datos de la cabecera, o null si no parece un GCI.
+  function leer(bytes) {
+    if (bytes.length < TAM_CABECERA || !(bytes[OFFSET_REGION] in REGIONES)) return null;
+    return {
+      codigo: ascii(bytes.subarray(0, 4)),
+      maker: ascii(bytes.subarray(4, 6)),
+      region: bytes[OFFSET_REGION],
+      tamano: bytes.length,
+      tipico: bytes[OFFSET_SIN_USO] === 0xFF && (bytes.length - TAM_CABECERA) % TAM_BLOQUE === 0,
+    };
+  }
+
+  // Copia de los bytes con la región cambiada (un solo byte).
+  function convertir(bytes, region) {
+    const copia = bytes.slice();
+    copia[OFFSET_REGION] = region;
+    return copia;
+  }
+
+  // "GC6E" + región P -> "GC6P"
+  function codigoConRegion(codigo, region) {
+    return codigo.slice(0, 3) + String.fromCharCode(region);
+  }
+
+  // Reemplaza el código viejo por el nuevo dentro del nombre; si no está, lo deja igual.
+  function renombrar(nombre, codigoViejo, codigoNuevo) {
+    const i = nombre.indexOf(codigoViejo);
+    if (i < 0) return nombre;
+    return nombre.slice(0, i) + codigoNuevo + nombre.slice(i + codigoViejo.length);
+  }
+
+  return { REGIONES, leer, convertir, codigoConRegion, renombrar };
+})();
+/* ===== FIN MÓDULO GCI ===== */
+
+
+/* =====================================================================
+   MÓDULO I18N  (textos por idioma; no toca el DOM)
+   Marcadores {nombre} se sustituyen con los parámetros de t().
+   ===================================================================== */
+const I18N = (() => {
+  const TEXTOS = {
+    es: {
+      marca: "Conversor GCI",
+      estado: "Local: el archivo no se sube",
+      idiomaEtiqueta: "Idioma",
+      tituloPagina: "Conversor de región GCI",
+      titulo: "Cambia la región de tu save de GameCube",
+      subtitulo: "Convierte un archivo .gci entre PAL, NTSC-U y NTSC-J. Solo modifica un byte de la cabecera.",
+      zonaTitulo: "Suelta tu archivo .gci aquí",
+      zonaSub: "o pulsa para elegirlo",
+      zonaSubCargado: "Pulsa para elegir otro archivo",
+      invalido: "Archivo no válido: el byte 0x03 no es P, E ni J. Prueba con otro .gci",
+      datosTitulo: "Archivo cargado",
+      celdaCodigo: "Código del juego",
+      celdaMaker: "Maker",
+      celdaRegion: "Región actual",
+      celdaTamano: "Tamaño",
+      bytes: "bytes",
+      avisoTipico: "Cabecera y tamaño típicos de un GCI",
+      avisoRaro: "Aviso: cabecera o tamaño poco comunes; revisa que sea un GCI",
+      convertirTitulo: "Convertir a",
+      zonaP: "Europa",
+      zonaE: "América",
+      zonaJ: "Japón",
+      regionActual: "Región actual",
+      destino: "Se descargará como: {nombre}",
+      destinoIgual: " (el nombre no contiene «{codigo}», se conserva igual)",
+      descargarComo: "Descargar como {region}",
+      usoTitulo: "Cómo se usa",
+      uso1: "<b>Carga</b> tu archivo <code>.gci</code> arrastrándolo o pulsando la zona de la izquierda.",
+      uso2: "<b>Elige</b> la región de destino. La región actual aparece bloqueada.",
+      uso3: "<b>Descarga</b> el save convertido y reemplaza el original en tu emulador o tarjeta de memoria.",
+      antesTitulo: "Antes de empezar",
+      antes1: "Todo ocurre en tu navegador: el archivo <b>no se sube</b> a ningún servidor. Funciona igual desde un hosting o descargando este HTML y abriéndolo con doble clic.",
+      antes2: "No se crea <code>.BAK</code>: el navegador no puede sobrescribir tu original, así que descargas una copia y el original queda intacto.",
+      antes3: "El nombre del archivo descargado también cambia la letra de región del código del juego (por ejemplo <code>GC6E</code> pasa a <code>GC6P</code>).",
+      antes4: "Solo cambia el byte <code>0x03</code> de la cabecera. No convierte los datos internos del save, por lo que el juego de destino debe usar el mismo formato de guardado.",
+    },
+    en: {
+      marca: "GCI Converter",
+      estado: "Local: your file is never uploaded",
+      idiomaEtiqueta: "Language",
+      tituloPagina: "GCI Region Converter",
+      titulo: "Change the region of your GameCube save",
+      subtitulo: "Convert a .gci file between PAL, NTSC-U and NTSC-J. It only changes one header byte.",
+      zonaTitulo: "Drop your .gci file here",
+      zonaSub: "or click to choose it",
+      zonaSubCargado: "Click to choose another file",
+      invalido: "Invalid file: byte 0x03 is not P, E or J. Try another .gci",
+      datosTitulo: "Loaded file",
+      celdaCodigo: "Game code",
+      celdaMaker: "Maker",
+      celdaRegion: "Current region",
+      celdaTamano: "Size",
+      bytes: "bytes",
+      avisoTipico: "Header and size look like a typical GCI",
+      avisoRaro: "Warning: unusual header or size; check that this is a GCI",
+      convertirTitulo: "Convert to",
+      zonaP: "Europe",
+      zonaE: "Americas",
+      zonaJ: "Japan",
+      regionActual: "Current region",
+      destino: "Will be downloaded as: {nombre}",
+      destinoIgual: " (the name doesn't contain “{codigo}”, so it stays the same)",
+      descargarComo: "Download as {region}",
+      usoTitulo: "How to use",
+      uso1: "<b>Load</b> your <code>.gci</code> file by dragging it or clicking the area on the left.",
+      uso2: "<b>Choose</b> the target region. The current region is locked.",
+      uso3: "<b>Download</b> the converted save and replace the original in your emulator or memory card.",
+      antesTitulo: "Before you start",
+      antes1: "Everything happens in your browser: the file is <b>never uploaded</b> to any server. It works the same from a host or by downloading this HTML and opening it with a double click.",
+      antes2: "No <code>.BAK</code> file is created: the browser can't overwrite your original, so you download a copy and the original stays untouched.",
+      antes3: "The downloaded file name also gets the new region letter in the game code (for example <code>GC6E</code> becomes <code>GC6P</code>).",
+      antes4: "It only changes byte <code>0x03</code> of the header. It does not convert the save's internal data, so the target game must use the same save format.",
+    },
+  };
+  const CLAVE_ALMACEN = "gci-idioma";
+  let actual = "es";
+
+  function t(clave, params = {}) {
+    const plantilla = TEXTOS[actual][clave] ?? clave;
+    return plantilla.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? "");
+  }
+
+  // Idioma guardado; si no hay, el del navegador (es / en).
+  function detectar() {
+    try {
+      const guardado = localStorage.getItem(CLAVE_ALMACEN);
+      if (guardado in TEXTOS) return guardado;
+    } catch (e) { /* sin almacenamiento: se ignora */ }
+    return navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
+  }
+
+  function fijar(idioma, recordar = false) {
+    actual = idioma in TEXTOS ? idioma : "es";
+    if (recordar) {
+      try { localStorage.setItem(CLAVE_ALMACEN, actual); } catch (e) { /* se ignora */ }
+    }
+    return actual;
+  }
+
+  return { t, detectar, fijar, claves: (idioma) => Object.keys(TEXTOS[idioma]), get actual() { return actual; } };
+})();
+/* ===== FIN MÓDULO I18N ===== */
+
+
+/* =====================================================================
+   UI  (conecta los módulos GCI e I18N con el DOM)
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const t = I18N.t;
+const estado = { bytes: null, nombre: "", info: null, destino: null, invalido: false };
+
+function celda(etiqueta, valor) {
+  const div = document.createElement("div");
+  div.className = "celda";
+  const small = document.createElement("small");
+  small.textContent = etiqueta;
+  const strong = document.createElement("strong");
+  strong.textContent = valor;
+  div.append(small, strong);
+  return div;
+}
+
+function nombreFinal() {
+  const { codigo } = estado.info;
+  return GCI.renombrar(estado.nombre, codigo, GCI.codigoConRegion(codigo, estado.destino));
+}
+
+/* ----- Textos fijos del marcado (data-i18n / data-i18n-html) ----- */
+function traducirEstatico() {
+  document.documentElement.lang = I18N.actual;
+  document.title = t("tituloPagina");
+  $("idioma").setAttribute("aria-label", t("idiomaEtiqueta"));
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+  // Solo textos propios del diccionario (nunca datos del archivo): es seguro usar innerHTML.
+  for (const el of document.querySelectorAll("[data-i18n-html]")) el.innerHTML = t(el.dataset.i18nHtml);
+}
+
+/* ----- Textos que dependen del archivo cargado ----- */
+function pintarZona() {
+  let titulo = t("zonaTitulo"), sub = t("zonaSub");
+  if (estado.info) { titulo = estado.nombre; sub = t("zonaSubCargado"); }
+  else if (estado.invalido) titulo = t("invalido");
+  $("zonaTitulo").textContent = titulo;
+  $("zonaSub").textContent = sub;
+}
+
+function dibujarRegiones() {
+  const caja = $("regiones");
+  caja.replaceChildren();
+  for (const [clave, reg] of Object.entries(GCI.REGIONES)) {
+    const valor = +clave;
+    const actual = valor === estado.info.region;
+    const boton = document.createElement("button");
+    boton.className = "region" + (valor === estado.destino ? " elegida" : "");
+    boton.disabled = actual;
+    for (const [etiqueta, texto] of [["i", reg.letra], ["b", reg.nombre], ["span", actual ? t("regionActual") : t("zona" + reg.letra)]]) {
+      const el = document.createElement(etiqueta);
+      el.textContent = texto;
+      boton.append(el);
+    }
+    boton.onclick = () => { estado.destino = valor; dibujarRegiones(); };
+    caja.append(boton);
+  }
+
+  const final = nombreFinal();
+  $("destino").textContent = t("destino", { nombre: final }) +
+    (final === estado.nombre ? t("destinoIgual", { codigo: estado.info.codigo }) : "");
+  $("descargar").textContent = t("descargarComo", { region: GCI.REGIONES[estado.destino].nombre });
+  $("descargar").disabled = false;
+}
+
+function pintar() {
+  pintarZona();
+  const { info } = estado;
+  $("tarjetaDatos").hidden = $("tarjetaConvertir").hidden = !info;
+  if (!info) return;
+
+  $("datos").replaceChildren(
+    celda(t("celdaCodigo"), info.codigo),
+    celda(t("celdaMaker"), info.maker),
+    celda(t("celdaRegion"), GCI.REGIONES[info.region].nombre),
+    celda(t("celdaTamano"), info.tamano.toLocaleString(I18N.actual) + " " + t("bytes")),
+  );
+  $("aviso").textContent = t(info.tipico ? "avisoTipico" : "avisoRaro");
+  $("aviso").className = "aviso" + (info.tipico ? "" : " alerta");
+  dibujarRegiones();
+}
+
+/* ----- Acciones ----- */
+function cargar(archivo) {
+  const lector = new FileReader();
+  lector.onload = () => {
+    const bytes = new Uint8Array(lector.result);
+    const info = GCI.leer(bytes);
+    Object.assign(estado, info
+      ? { bytes, info, nombre: archivo.name, destino: info.region === 0x45 ? 0x50 : 0x45, invalido: false }
+      : { bytes: null, info: null, destino: null, invalido: true });
+    pintar();
+  };
+  lector.readAsArrayBuffer(archivo);
+}
+
+function descargar() {
+  const salida = GCI.convertir(estado.bytes, estado.destino);
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(new Blob([salida], { type: "application/octet-stream" }));
+  enlace.download = nombreFinal();
+  enlace.click();
+  setTimeout(() => URL.revokeObjectURL(enlace.href), 1000);
+}
+
+function cambiarIdioma(idioma) {
+  I18N.fijar(idioma, true);
+  traducirEstatico();
+  pintar();
+}
+
+/* ----- Eventos ----- */
+const zona = $("zona");
+$("archivo").onchange = (e) => e.target.files[0] && cargar(e.target.files[0]);
+$("descargar").onclick = descargar;
+$("idioma").onchange = (e) => cambiarIdioma(e.target.value);
+zona.onkeydown = (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("archivo").click(); }
+};
+for (const ev of ["dragenter", "dragover"])
+  zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("sobre"); });
+for (const ev of ["dragleave", "drop"])
+  zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("sobre"); });
+zona.addEventListener("drop", (e) => e.dataTransfer.files[0] && cargar(e.dataTransfer.files[0]));
+
+/* ----- Arranque ----- */
+I18N.fijar(I18N.detectar());
+$("idioma").value = I18N.actual;
+traducirEstatico();
+pintar();
+</script>
+</body>
+</html>
